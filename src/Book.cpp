@@ -42,6 +42,11 @@ namespace bookmgmt
             cost = Money::fromMinor(cost.minorUnits() * 120 / 100);
         }
 
+        if (quantity >= 10)
+        {
+            cost = Money::fromMinor(cost.minorUnits() * 90 / 100);
+        }
+
         return cost;
     }
 

@@ -139,6 +139,9 @@ static void testResourcesAndCost()
     CHECK(paperback.costFor(2) == Money::of(200));
     CHECK(hardcover.costFor(2) == Money::of(240));
     CHECK_THROWS(hardcover.costFor(0), std::invalid_argument);
+
+    CHECK(e.costFor(50) == Money::of(600));
+    CHECK(e.costFor(60) == Money::of(650));
 }
 
 static void testCatalog()
