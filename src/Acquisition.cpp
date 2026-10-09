@@ -40,6 +40,46 @@ namespace bookmgmt
             preTaxCost.minorUnits() * (100 + taxPercent) / 100);
     }
 
+    std::string AcquisitionManager::checkTitleLimit(
+        const Resource &resource, const std::string &id) const
+    {
+        const auto limit = titleLimits_.find(resource.category());
+
+        if (limit == titleLimits_.end())
+        {
+            return {};
+        }
+
+        const auto titles = purchasedTitles_.find(resource.category());
+
+        const bool alreadyPurchased =
+            titles != purchasedTitles_.end() &&
+            titles->second.count(id) > 0;
+
+        const std::size_t currentCount =
+            titles == purchasedTitles_.end() ? 0 : titles->second.size();
+
+        if (!alreadyPurchased &&
+            currentCount >= static_cast<std::size_t>(limit->second))
+        {
+            return std::string(categoryName(resource.category())) +
+                   " distinct-title limit exceeded";
+        }
+
+        return {};
+    }
+
+    void AcquisitionManager::setTitleLimit(ResourceCategory category,
+                                           int maxTitles)
+    {
+        if (maxTitles < 0)
+        {
+            throw std::invalid_argument("title limit must not be negative");
+        }
+
+        titleLimits_[category] = maxTitles;
+    }
+
     bool AcquisitionManager::canPurchase(const std::string &id, int quantity,
                                          std::string *reason) const
     {
@@ -55,7 +95,13 @@ namespace bookmgmt
             {
                 const Money preTaxCost = resource->costFor(quantity);
                 const Money postTaxCost = applyTax(*resource, preTaxCost);
-                why = budget_.check(resource->category(), quantity, postTaxCost);
+
+                why = checkTitleLimit(*resource, id);
+                if (why.empty())
+                {
+                    why = budget_.check(resource->category(), quantity,
+                                        postTaxCost);
+                }
             }
         }
         else
@@ -67,6 +113,7 @@ namespace bookmgmt
         {
             *reason = why;
         }
+
         return why.empty();
     }
 
@@ -92,11 +139,20 @@ namespace bookmgmt
                                                        int quantity)
     {
         const Resource &resource = catalog_.get(id);
+
         const Money preTaxCost = resource.costFor(quantity);
         const Money postTaxCost = applyTax(resource, preTaxCost);
 
+        const std::string reason = checkTitleLimit(resource, id);
+        if (!reason.empty())
+        {
+            throw QuotaExceededError(reason);
+        }
+
         budget_.commit(resource.category(), quantity, postTaxCost);
         catalog_.addHoldings(id, quantity);
+
+        purchasedTitles_[resource.category()].insert(id);
 
         return record(&resource, id, quantity, preTaxCost, postTaxCost, true, {});
     }
@@ -126,8 +182,13 @@ namespace bookmgmt
             {
                 preTaxCost = resource->costFor(request.quantity);
                 postTaxCost = applyTax(*resource, preTaxCost);
-                reason = budget_.check(resource->category(), request.quantity,
-                                       postTaxCost);
+
+                reason = checkTitleLimit(*resource, request.resourceId);
+                if (reason.empty())
+                {
+                    reason = budget_.check(resource->category(),
+                                           request.quantity, postTaxCost);
+                }
             }
 
             if (reason.empty())
@@ -148,6 +209,7 @@ namespace bookmgmt
     Money AcquisitionManager::totalSpent() const
     {
         Money sum;
+
         for (const auto &entry : history_)
         {
             if (entry.approved)
@@ -155,6 +217,7 @@ namespace bookmgmt
                 sum += entry.cost;
             }
         }
+
         return sum;
     }
 

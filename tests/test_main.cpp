@@ -241,6 +241,41 @@ static void testAcquisition()
     CHECK(acq.history().size() == 6);
 }
 
+static void testTitleLimits()
+{
+    Catalog c;
+    c.emplace<Book>("B1", "Book One", std::vector<std::string>{"A"},
+                    "i1", "P", 2020, Money::of(100));
+    c.emplace<Book>("B2", "Book Two", std::vector<std::string>{"B"},
+                    "i2", "P", 2021, Money::of(100));
+
+    Budget b(Money::of(1000));
+    AcquisitionManager acq(c, b);
+    acq.setTitleLimit(ResourceCategory::Book, 1);
+
+    CHECK(acq.canPurchase("B1", 1));
+    CHECK(acq.purchase("B1", 1).approved);
+
+    // Buying the same title again is allowed.
+    CHECK(acq.canPurchase("B1", 1));
+    CHECK(acq.purchase("B1", 1).approved);
+
+    // A different title in the same category is rejected.
+    std::string reason;
+    CHECK(!acq.canPurchase("B2", 1, &reason));
+    CHECK(reason.find("title limit") != std::string::npos);
+
+    CHECK_THROWS(acq.purchase("B2", 1), QuotaExceededError);
+
+    // A rejected batch request must not consume a title slot.
+    acq.setTitleLimit(ResourceCategory::Book, 2);
+    auto results = acq.processBatch({{"B2", 1}});
+    CHECK(results.size() == 1);
+    CHECK(results[0].approved);
+
+    CHECK_THROWS(acq.setTitleLimit(ResourceCategory::Book, -1),
+                 std::invalid_argument);
+}
 int main()
 {
     testMoney();
@@ -248,6 +283,7 @@ int main()
     testCatalog();
     testBudget();
     testAcquisition();
+    testTitleLimits();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

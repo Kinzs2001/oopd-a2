@@ -2,6 +2,8 @@
 #pragma once
 
 #include <iosfwd>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -45,15 +47,21 @@ namespace bookmgmt
         const PurchaseRecord &purchase(const std::string &id, int quantity);
 
         std::vector<PurchaseRecord> processBatch(
-            const std::vector<PurchaseRequest> &reqs);
+            const std::vector<PurchaseRequest> &requests);
 
         const std::vector<PurchaseRecord> &history() const { return history_; }
         Money totalSpent() const;
 
         void printReport(std::ostream &os) const;
 
+        // Set the maximum number of distinct resource IDs purchasable per category.
+        void setTitleLimit(ResourceCategory category, int maxTitles);
+
     private:
         Money applyTax(const Resource &resource, Money preTaxCost) const;
+
+        std::string checkTitleLimit(const Resource &resource,
+                                    const std::string &id) const;
 
         PurchaseRecord &record(const Resource *resource, const std::string &id,
                                int quantity, Money preTaxCost, Money postTaxCost,
@@ -63,6 +71,10 @@ namespace bookmgmt
         Budget &budget_;
         int printTaxPercent_;
         int electronicTaxPercent_;
+
+        std::map<ResourceCategory, int> titleLimits_;
+        std::map<ResourceCategory, std::set<std::string>> purchasedTitles_;
+
         std::vector<PurchaseRecord> history_;
         int nextOrderNo_ = 1;
     };
