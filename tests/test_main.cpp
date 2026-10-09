@@ -94,6 +94,21 @@ static void testResourcesAndCost()
     CHECK_THROWS(Journal("J2", "Nature", "Springer", 2026,
                          "0028-0836", 52, Money::of(500), 0),
                  std::invalid_argument);
+
+    EBook eb("EB1", "Effective Modern C++",
+             {"Scott Meyers"}, "978-1491903995", "O'Reilly",
+             2014, Money::of(20), "https://example.com/ebook",
+             EBookFormat::EPUB, true,
+             LicenseModel::AnnualSubscription, Money::of(50));
+
+    CHECK(eb.category() == ResourceCategory::EBook);
+    CHECK(eb.isDigital());
+    CHECK(eb.authors().size() == 1);
+    CHECK(eb.isbn() == "978-1491903995");
+    CHECK(eb.format() == EBookFormat::EPUB);
+    CHECK(eb.drmProtected());
+    CHECK(eb.costFor(2) == Money::of(90));
+    CHECK(std::string(formatName(EBookFormat::PDF)) == "PDF");
 }
 
 static void testCatalog()
