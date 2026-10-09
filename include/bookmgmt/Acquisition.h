@@ -1,6 +1,5 @@
+
 #pragma once
-// AcquisitionManager: turns purchase requests into orders, enforcing the
-// Budget's quotas, updating Catalog holdings and keeping an order history.
 
 #include <iosfwd>
 #include <string>
@@ -9,58 +8,63 @@
 #include "bookmgmt/Budget.h"
 #include "bookmgmt/Catalog.h"
 
-namespace bookmgmt {
+namespace bookmgmt
+{
 
-struct PurchaseRequest {
-    std::string resourceId;
-    int quantity;  // copies for print, seats for electronic
-};
+    struct PurchaseRequest
+    {
+        std::string resourceId;
+        int quantity;
+    };
 
-struct PurchaseRecord {
-    int orderNo;
-    std::string resourceId;
-    std::string title;
-    ResourceCategory category;
-    int quantity;
-    Money cost;
-    bool approved;
-    std::string reason;  // why it was rejected; empty if approved
-};
+    struct PurchaseRecord
+    {
+        int orderNo;
+        std::string resourceId;
+        std::string title;
+        ResourceCategory category;
+        int quantity;
+        Money preTaxCost;
+        Money cost; // Post-tax cost
+        bool approved;
+        std::string reason;
+    };
 
-class AcquisitionManager {
-public:
-    AcquisitionManager(Catalog& catalog, Budget& budget);
+    class AcquisitionManager
+    {
+    public:
+        AcquisitionManager(Catalog &catalog, Budget &budget,
+                           int printTaxPercent = 0,
+                           int electronicTaxPercent = 0);
 
-    // Price of a request without buying anything. Throws NotFoundError.
-    Money quote(const std::string& id, int quantity) const;
+        Money quote(const std::string &id, int quantity) const;
 
-    // True if the purchase would be approved; if not, `reason` explains why.
-    bool canPurchase(const std::string& id, int quantity,
-                     std::string* reason = nullptr) const;
+        bool canPurchase(const std::string &id, int quantity,
+                         std::string *reason = nullptr) const;
 
-    // Buys immediately. Throws NotFoundError, QuotaExceededError,
-    // BudgetExceededError or std::invalid_argument. On success the budget
-    // and holdings are updated and the record is added to history.
-    const PurchaseRecord& purchase(const std::string& id, int quantity);
+        const PurchaseRecord &purchase(const std::string &id, int quantity);
 
-    // Processes requests in order; each is approved or rejected on its own
-    // (never throws for a rejected request). Every outcome is recorded.
-    // EXTENSION POINT: priority ordering, all-or-nothing batches, ...
-    std::vector<PurchaseRecord> processBatch(const std::vector<PurchaseRequest>& reqs);
+        std::vector<PurchaseRecord> processBatch(
+            const std::vector<PurchaseRequest> &reqs);
 
-    const std::vector<PurchaseRecord>& history() const { return history_; }
-    Money totalSpent() const;
+        const std::vector<PurchaseRecord> &history() const { return history_; }
+        Money totalSpent() const;
 
-    void printReport(std::ostream& os) const;
+        void printReport(std::ostream &os) const;
 
-private:
-    PurchaseRecord& record(const Resource* r, const std::string& id, int qty,
-                           Money cost, bool approved, std::string reason);
+    private:
+        Money applyTax(const Resource &resource, Money preTaxCost) const;
 
-    Catalog& catalog_;
-    Budget& budget_;
-    std::vector<PurchaseRecord> history_;
-    int nextOrderNo_ = 1;
-};
+        PurchaseRecord &record(const Resource *resource, const std::string &id,
+                               int quantity, Money preTaxCost, Money postTaxCost,
+                               bool approved, std::string reason);
 
-}  // namespace bookmgmt
+        Catalog &catalog_;
+        Budget &budget_;
+        int printTaxPercent_;
+        int electronicTaxPercent_;
+        std::vector<PurchaseRecord> history_;
+        int nextOrderNo_ = 1;
+    };
+
+} // namespace bookmgmt
