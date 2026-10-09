@@ -109,6 +109,27 @@ static void testResourcesAndCost()
     CHECK(eb.drmProtected());
     CHECK(eb.costFor(2) == Money::of(90));
     CHECK(std::string(formatName(EBookFormat::PDF)) == "PDF");
+
+    AudioBook audio("A1", "Clean Code Audio", "Publisher", 2024,
+                    Money::of(15), "https://example.com/audio",
+                    "Narrator Name", 300,
+                    LicenseModel::AnnualSubscription, Money::of(25));
+
+    CHECK(audio.category() == ResourceCategory::AudioBook);
+    CHECK(audio.isDigital());
+    CHECK(audio.narrator() == "Narrator Name");
+    CHECK(audio.durationMinutes() == 300);
+    CHECK(audio.costFor(2) == Money::of(55));
+
+    Thesis thesis("T1", "Graph Algorithms", "IIIT Delhi", 2026,
+                  Money::of(0), "IIIT Delhi", "M.Tech", "Dr. Example");
+
+    CHECK(thesis.category() == ResourceCategory::Thesis);
+    CHECK(!thesis.isDigital());
+    CHECK(thesis.university() == "IIIT Delhi");
+    CHECK(thesis.degree() == "M.Tech");
+    CHECK(thesis.supervisor() == "Dr. Example");
+    CHECK(thesis.costFor(3) == Money::of(0));
 }
 
 static void testCatalog()
