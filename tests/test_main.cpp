@@ -130,6 +130,15 @@ static void testResourcesAndCost()
     CHECK(thesis.degree() == "M.Tech");
     CHECK(thesis.supervisor() == "Dr. Example");
     CHECK(thesis.costFor(3) == Money::of(0));
+
+    Book paperback("BP", "Paperback", {"A"}, "I1", "P", 2024,
+                   Money::of(100), 1, Binding::Paperback);
+    Book hardcover("BH", "Hardcover", {"A"}, "I2", "P", 2024,
+                   Money::of(100), 1, Binding::Hardcover);
+
+    CHECK(paperback.costFor(2) == Money::of(200));
+    CHECK(hardcover.costFor(2) == Money::of(240));
+    CHECK_THROWS(hardcover.costFor(0), std::invalid_argument);
 }
 
 static void testCatalog()
