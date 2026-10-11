@@ -223,5 +223,31 @@ int main()
     lendingCatalog.closeSession("E401", "P2");
     std::cout << "P2 closed electronic session E401\n";
 
+    std::cout << "\n=== Q15: Currency-aware Money ===\n";
+
+    Money inr = Money::of(100, 50);
+    Money usd = Money::of(100, 50, "USD");
+
+    std::cout << "Default currency: " << inr.currency() << '\n';
+    std::cout << "USD amount: " << usd.toString()
+              << ' ' << usd.currency() << '\n';
+
+    std::cout << "USD sum: "
+              << (Money::of(10, 0, "USD") +
+                  Money::of(20, 0, "USD"))
+                     .toString()
+              << " USD\n";
+
+    try
+    {
+        auto invalid = inr + usd;
+        std::cout << invalid.toString() << '\n';
+    }
+    catch (const std::invalid_argument &e)
+    {
+        std::cout << "Mixed-currency addition rejected: "
+                  << e.what() << '\n';
+    }
+
     return 0;
 }

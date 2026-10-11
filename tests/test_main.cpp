@@ -51,6 +51,49 @@ static void testMoney()
     CHECK(Money::of(3) * 4 == Money::of(12));
     CHECK(Money::of(1) < Money::of(2));
     CHECK_THROWS(Money::of(1, 100), std::invalid_argument);
+
+    // Q15: Currency support
+    Money inr = Money::of(10, 50);
+    Money usd = Money::of(10, 50, "USD");
+    Money eur = Money::of(10, 50, "EUR");
+
+    CHECK(inr.currency() == "INR");
+    CHECK(usd.currency() == "USD");
+    CHECK(usd.toString() == "10.50");
+
+    CHECK((Money::of(1, 0, "USD") +
+           Money::of(2, 0, "USD"))
+              .toString() == "3.00");
+
+    CHECK_THROWS(Money::of(1, 0, "USD") +
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") -
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") ==
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") <
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") <=
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") >
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, "USD") >=
+                     Money::of(1, 0, "EUR"),
+                 std::invalid_argument);
+
+    CHECK_THROWS(Money::of(1, 0, ""), std::invalid_argument);
 }
 
 static void testResourcesAndCost()

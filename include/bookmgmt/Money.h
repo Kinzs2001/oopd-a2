@@ -1,50 +1,121 @@
+
 #pragma once
-// Money: fixed-point currency amount stored in minor units (e.g. paise/cents).
-// Using an integer avoids floating-point rounding errors in cost/budget sums.
+// Money: fixed-point currency amount stored in minor units.
 
 #include <cstdint>
 #include <iosfwd>
+#include <stdexcept>
 #include <string>
 
-namespace bookmgmt {
+namespace bookmgmt
+{
+    class Money
+    {
+    public:
+        Money() = default;
 
-class Money {
-public:
-    constexpr Money() = default;
+        static Money fromMinor(std::int64_t minor)
+        {
+            return Money(minor);
+        }
 
-    // Construct from minor units: Money::fromMinor(12550) == 125.50
-    static constexpr Money fromMinor(std::int64_t minor) { return Money(minor); }
-    // Construct from major + minor parts: Money::of(125, 50) == 125.50
-    static Money of(std::int64_t major, int minor = 0);
+        static Money of(std::int64_t major, int minor = 0);
 
-    constexpr std::int64_t minorUnits() const { return minor_; }
-    double toDouble() const { return static_cast<double>(minor_) / 100.0; }
-    std::string toString() const;  // "1234.50" / "-3.05"
+        static Money fromMinor(std::int64_t minor, std::string currency)
+        {
+            return Money(minor, std::move(currency));
+        }
 
-    constexpr bool isZero() const { return minor_ == 0; }
-    constexpr bool isNegative() const { return minor_ < 0; }
+        static Money of(std::int64_t major, int minor,
+                        std::string currency)
+        {
+            Money amount = of(major, minor);
+            amount.currency_ = std::move(currency);
+            amount.validateCurrency();
+            return amount;
+        }
 
-    Money& operator+=(Money o) { minor_ += o.minor_; return *this; }
-    Money& operator-=(Money o) { minor_ -= o.minor_; return *this; }
-    Money& operator*=(std::int64_t k) { minor_ *= k; return *this; }
+        std::int64_t minorUnits() const { return minor_; }
+        const std::string &currency() const { return currency_; }
 
-    friend Money operator+(Money a, Money b) { return a += b; }
-    friend Money operator-(Money a, Money b) { return a -= b; }
-    friend Money operator*(Money a, std::int64_t k) { return a *= k; }
-    friend Money operator*(std::int64_t k, Money a) { return a *= k; }
+        double toDouble() const
+        {
+            return static_cast<double>(minor_) / 100.0;
+        }
 
-    friend constexpr bool operator==(Money a, Money b) { return a.minor_ == b.minor_; }
-    friend constexpr bool operator!=(Money a, Money b) { return a.minor_ != b.minor_; }
-    friend constexpr bool operator<(Money a, Money b) { return a.minor_ < b.minor_; }
-    friend constexpr bool operator<=(Money a, Money b) { return a.minor_ <= b.minor_; }
-    friend constexpr bool operator>(Money a, Money b) { return a.minor_ > b.minor_; }
-    friend constexpr bool operator>=(Money a, Money b) { return a.minor_ >= b.minor_; }
+        std::string toString() const;
 
-private:
-    explicit constexpr Money(std::int64_t minor) : minor_(minor) {}
-    std::int64_t minor_ = 0;
-};
+        bool isZero() const { return minor_ == 0; }
+        bool isNegative() const { return minor_ < 0; }
 
-std::ostream& operator<<(std::ostream& os, Money m);
+        Money &operator+=(Money other)
+        {
+            ensureSameCurrency(other);
+            minor_ += other.minor_;
+            return *this;
+        }
 
-}  // namespace bookmgmt
+        Money &operator-=(Money other)
+        {
+            ensureSameCurrency(other);
+            minor_ -= other.minor_;
+            return *this;
+        }
+
+        Money &operator*=(std::int64_t factor)
+        {
+            minor_ *= factor;
+            return *this;
+        }
+
+        friend Money operator+(Money a, Money b) { return a += b; }
+        friend Money operator-(Money a, Money b) { return a -= b; }
+        friend Money operator*(Money a, std::int64_t k) { return a *= k; }
+        friend Money operator*(std::int64_t k, Money a) { return a *= k; }
+
+        friend bool operator==(Money a, Money b)
+        {
+            a.ensureSameCurrency(b);
+            return a.minor_ == b.minor_;
+        }
+
+        friend bool operator!=(Money a, Money b) { return !(a == b); }
+
+        friend bool operator<(Money a, Money b)
+        {
+            a.ensureSameCurrency(b);
+            return a.minor_ < b.minor_;
+        }
+
+        friend bool operator<=(Money a, Money b) { return !(b < a); }
+        friend bool operator>(Money a, Money b) { return b < a; }
+        friend bool operator>=(Money a, Money b) { return !(a < b); }
+
+    private:
+        explicit Money(std::int64_t minor) : minor_(minor) {}
+
+        Money(std::int64_t minor, std::string currency)
+            : minor_(minor), currency_(std::move(currency))
+        {
+            validateCurrency();
+        }
+
+        void validateCurrency() const
+        {
+            if (currency_.empty())
+                throw std::invalid_argument("currency code cannot be empty");
+        }
+
+        void ensureSameCurrency(const Money &other) const
+        {
+            if (currency_ != other.currency_)
+                throw std::invalid_argument("currency mismatch: " +
+                                            currency_ + " vs " + other.currency_);
+        }
+
+        std::int64_t minor_ = 0;
+        std::string currency_ = "INR";
+    };
+
+    std::ostream &operator<<(std::ostream &os, Money m);
+} // namespace bookmgmt
