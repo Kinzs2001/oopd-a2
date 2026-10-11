@@ -34,6 +34,7 @@ namespace bookmgmt
         bool cancellation = false;
         int relatedOrderNo = 0;
         std::string department = "General";
+        std::string vendor;
     };
 
     class AcquisitionManager
@@ -78,13 +79,18 @@ namespace bookmgmt
     private:
         Money applyTax(const Resource &resource, Money preTaxCost) const;
 
+        Money purchaseCost(const Resource &resource, int quantity) const;
+        std::string selectedVendor(const Resource &resource) const;
+
         std::string checkTitleLimit(const Resource &resource,
                                     const std::string &id) const;
 
         PurchaseRecord &record(const Resource *resource, const std::string &id,
                                int quantity, Money preTaxCost, Money postTaxCost,
                                bool approved, std::string reason,
-                               const std::string &department = "General");
+                               const std::string &department = "General",
+                               const std::string &vendor = {});
+
         Catalog &catalog_;
         Budget &budget_;
         int printTaxPercent_;

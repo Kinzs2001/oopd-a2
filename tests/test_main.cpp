@@ -488,6 +488,73 @@ static void testAllOrNothingBatch()
     CHECK(c.holdings("B2") == 1);
 }
 
+static void testVendors()
+{
+    Catalog c;
+    auto &book = c.emplace<Book>(
+        "B1", "Vendor Test Book", std::vector<std::string>{"A"},
+        "i1", "P", 2020, Money::of(100), 1, Binding::Paperback);
+
+    book.addVendorOffer("Vendor A", Money::of(120));
+    book.addVendorOffer("Vendor B", Money::of(80));
+    book.addVendorOffer("Vendor C", Money::of(100));
+
+    CHECK(book.vendorOffers().size() == 3);
+    CHECK(book.cheapestVendorOffer().vendor == "Vendor B");
+    CHECK(book.cheapestVendorOffer().unitPrice == Money::of(80));
+    CHECK(book.costForAtPrice(2, Money::of(80)) == Money::of(160));
+
+    CHECK_THROWS(book.addVendorOffer("Vendor B", Money::of(70)),
+                 std::invalid_argument);
+    CHECK_THROWS(book.addVendorOffer("", Money::of(70)),
+                 std::invalid_argument);
+    CHECK_THROWS(book.addVendorOffer("Vendor D", Money::fromMinor(-1)),
+                 std::invalid_argument);
+
+    Budget budget(Money::of(1000));
+    AcquisitionManager acq(c, budget);
+
+    CHECK(acq.quote("B1", 2) == Money::of(160));
+    CHECK(acq.canPurchase("B1", 2));
+
+    const auto &order = acq.purchase("B1", 2);
+    CHECK(order.approved);
+    CHECK(order.vendor == "Vendor B");
+    CHECK(order.preTaxCost == Money::of(160));
+    CHECK(order.cost == Money::of(160));
+
+    std::ostringstream report;
+    acq.printReport(report);
+    CHECK(report.str().find("Vendor: Vendor B") != std::string::npos);
+
+    const auto &cancellation = acq.cancel(order.orderNo);
+    CHECK(cancellation.cancellation);
+    CHECK(cancellation.vendor == "Vendor B");
+    CHECK(acq.totalSpent() == Money::of(0));
+
+    const auto batch = acq.processBatch({{"B1", 1}}, true);
+    CHECK(batch.size() == 1);
+    CHECK(batch[0].approved);
+    CHECK(batch[0].vendor == "Vendor B");
+    CHECK(batch[0].preTaxCost == Money::of(80));
+
+    Catalog emptyCatalog;
+    emptyCatalog.emplace<Book>(
+        "B2", "No Vendor Book", std::vector<std::string>{"B"},
+        "i2", "P", 2021, Money::of(50));
+
+    Budget emptyBudget(Money::of(200));
+    AcquisitionManager emptyAcq(emptyCatalog, emptyBudget);
+    const auto &ordinary = emptyAcq.purchase("B2", 1);
+    CHECK(ordinary.approved);
+    CHECK(ordinary.vendor.empty());
+    CHECK(ordinary.cost == Money::of(50));
+
+    Book noOffers("B3", "No Offers", {"C"}, "i3", "P", 2022,
+                  Money::of(30));
+    CHECK_THROWS(noOffers.cheapestVendorOffer(), std::logic_error);
+}
+
 int main()
 {
     testMoney();
@@ -500,6 +567,7 @@ int main()
     testDepartmentBudgets();
     testBudgetRollover();
     testAllOrNothingBatch();
+    testVendors();
 
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;

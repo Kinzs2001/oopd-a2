@@ -4,30 +4,34 @@
 
 #include "bookmgmt/Resource.h"
 
-namespace bookmgmt {
+namespace bookmgmt
+{
 
-class Journal : public Resource {
-public:
-    Journal(std::string id, std::string title, std::string publisher, int year,
-        std::string issn, int issuesPerYear, Money unitPrice,
-        int subscriptionYears = 1);
+    class Journal : public Resource
+    {
+    public:
+        Journal(std::string id, std::string title, std::string publisher, int year,
+                std::string issn, int issuesPerYear, Money unitPrice,
+                int subscriptionYears = 1);
 
-    const std::string& issn() const { return issn_; }
-    int issuesPerYear() const { return issuesPerYear_; }
-    int subscriptionYears() const { return subscriptionYears_; }
+        const std::string &issn() const { return issn_; }
+        int issuesPerYear() const { return issuesPerYear_; }
+        int subscriptionYears() const { return subscriptionYears_; }
 
-    ResourceCategory category() const override {
-        return ResourceCategory::Journal;
-    }
-    Money costFor(int quantity) const override;
+        ResourceCategory category() const override
+        {
+            return ResourceCategory::Journal;
+        }
+        Money costFor(int quantity) const override;
+        Money costForAtPrice(int quantity, Money price) const override;
 
-protected:
-    void printDetails(std::ostream& os) const override;
+    protected:
+        void printDetails(std::ostream &os) const override;
 
-private:
-    std::string issn_;
-    int issuesPerYear_;
-    int subscriptionYears_;
-};
+    private:
+        std::string issn_;
+        int issuesPerYear_;
+        int subscriptionYears_;
+    };
 
-}  // namespace bookmgmt
+} // namespace bookmgmt

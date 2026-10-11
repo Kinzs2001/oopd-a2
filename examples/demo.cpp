@@ -133,5 +133,33 @@ int main()
     std::cout << "Spent after successful batch: "
               << atomicBudget.spent() << "\n";
 
+    // Q12: Vendor selection
+    std::cout << "\n=== Q12: Cheapest vendor selection ===\n";
+
+    Catalog vendorCatalog;
+    auto &vendorBook = vendorCatalog.emplace<Book>(
+        "B201", "Vendor Selection Book",
+        std::vector<std::string>{"Author C"},
+        "ISBN-201", "Publisher", 2026, Money::of(100));
+
+    vendorBook.addVendorOffer("Vendor A", Money::of(120));
+    vendorBook.addVendorOffer("Vendor B", Money::of(80));
+    vendorBook.addVendorOffer("Vendor C", Money::of(100));
+
+    Budget vendorBudget(Money::of(1000));
+    AcquisitionManager vendorAcq(vendorCatalog, vendorBudget);
+
+    std::cout << "Quote for 2 copies: "
+              << vendorAcq.quote("B201", 2) << "\n";
+
+    const auto &vendorOrder = vendorAcq.purchase("B201", 2);
+
+    std::cout << "Selected vendor: " << vendorOrder.vendor << "\n";
+    std::cout << "Pre-tax cost: " << vendorOrder.preTaxCost << "\n";
+    std::cout << "Post-tax cost: " << vendorOrder.cost << "\n";
+
+    std::cout << "Vendor purchase report:\n";
+    vendorAcq.printReport(std::cout);
+
     return 0;
 }

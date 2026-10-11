@@ -33,9 +33,19 @@ namespace bookmgmt
 
     Money Book::costFor(int quantity) const
     {
+        return costForAtPrice(quantity, unitPrice());
+    }
+
+    Money Book::costForAtPrice(int quantity, Money price) const
+    {
         requirePositive(quantity);
 
-        Money cost = unitPrice() * quantity;
+        if (price.isNegative())
+        {
+            throw std::invalid_argument("price must not be negative");
+        }
+
+        Money cost = price * quantity;
 
         if (binding_ == Binding::Hardcover)
         {

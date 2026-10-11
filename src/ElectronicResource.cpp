@@ -33,15 +33,25 @@ namespace bookmgmt
 
     Money ElectronicResource::costFor(int seats) const
     {
+        return costForAtPrice(seats, unitPrice());
+    }
+
+    Money ElectronicResource::costForAtPrice(int seats, Money price) const
+    {
         requirePositive(seats);
+
+        if (price.isNegative())
+        {
+            throw std::invalid_argument("price must not be negative");
+        }
 
         if (seats <= 50)
         {
-            return platformFee_ + unitPrice() * seats;
+            return platformFee_ + price * seats;
         }
 
-        Money first50 = unitPrice() * 50;
-        Money extra = unitPrice() * (seats - 50);
+        Money first50 = price * 50;
+        Money extra = price * (seats - 50);
         extra = Money::fromMinor(extra.minorUnits() / 2);
 
         return platformFee_ + first50 + extra;

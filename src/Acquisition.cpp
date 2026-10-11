@@ -28,7 +28,30 @@ namespace bookmgmt
 
     Money AcquisitionManager::quote(const std::string &id, int quantity) const
     {
-        return catalog_.get(id).costFor(quantity);
+        return purchaseCost(catalog_.get(id), quantity);
+    }
+
+    Money AcquisitionManager::purchaseCost(
+        const Resource &resource, int quantity) const
+    {
+        if (resource.vendorOffers().empty())
+        {
+            return resource.costFor(quantity);
+        }
+
+        const auto &offer = resource.cheapestVendorOffer();
+        return resource.costForAtPrice(quantity, offer.unitPrice);
+    }
+
+    std::string AcquisitionManager::selectedVendor(
+        const Resource &resource) const
+    {
+        if (resource.vendorOffers().empty())
+        {
+            return {};
+        }
+
+        return resource.cheapestVendorOffer().vendor;
     }
 
     Money AcquisitionManager::applyTax(const Resource &resource,
@@ -106,7 +129,7 @@ namespace bookmgmt
             }
             else
             {
-                const Money preTaxCost = resource->costFor(quantity);
+                const Money preTaxCost = purchaseCost(*resource, quantity);
                 const Money postTaxCost = applyTax(*resource, preTaxCost);
 
                 why = checkTitleLimit(*resource, id);
@@ -130,7 +153,9 @@ namespace bookmgmt
     PurchaseRecord &AcquisitionManager::record(
         const Resource *resource, const std::string &id, int quantity,
         Money preTaxCost, Money postTaxCost, bool approved,
-        std::string reason, const std::string &department)
+        std::string reason, const std::string &department,
+        const std::string &vendor)
+
     {
         history_.push_back(PurchaseRecord{
             nextOrderNo_++,
@@ -144,7 +169,7 @@ namespace bookmgmt
             std::move(reason),
             false,
             0,
-            department});
+            department, vendor});
 
         return history_.back();
     }
@@ -158,7 +183,7 @@ namespace bookmgmt
         if (!budget)
             throw std::invalid_argument("unknown department: " + department);
 
-        const Money preTaxCost = resource.costFor(quantity);
+        const Money preTaxCost = purchaseCost(resource, quantity);
         const Money postTaxCost = applyTax(resource, preTaxCost);
 
         const std::string reason = checkTitleLimit(resource, id);
@@ -171,7 +196,8 @@ namespace bookmgmt
         purchasedTitles_[resource.category()].insert(id);
 
         return record(&resource, id, quantity, preTaxCost,
-                      postTaxCost, true, {}, department);
+                      postTaxCost, true, {}, department,
+                      selectedVendor(resource));
     }
 
     std::vector<PurchaseRecord> AcquisitionManager::processBatch(
@@ -220,7 +246,7 @@ namespace bookmgmt
                 else
                 {
                     validation.preTaxCost =
-                        resource->costFor(request.quantity);
+                        purchaseCost(*resource, request.quantity);
                     validation.postTaxCost =
                         applyTax(*resource, validation.preTaxCost);
 
@@ -331,7 +357,7 @@ namespace bookmgmt
             }
             else
             {
-                preTaxCost = resource->costFor(request.quantity);
+                preTaxCost = purchaseCost(*resource, request.quantity);
                 postTaxCost = applyTax(*resource, preTaxCost);
 
                 reason = checkTitleLimit(*resource, request.resourceId);
@@ -449,7 +475,7 @@ namespace bookmgmt
             "Cancellation of order #" + std::to_string(orderNo),
             true,
             orderNo,
-            original.department});
+            original.department, original.vendor});
 
         return history_.back();
     }
@@ -473,6 +499,8 @@ namespace bookmgmt
                << entry.title
                << "\n        Pre-tax: " << entry.preTaxCost
                << "  Post-tax: " << entry.cost;
+            if (!entry.vendor.empty())
+                os << "  Vendor: " << entry.vendor;
 
             if (entry.cancellation)
             {
