@@ -161,5 +161,37 @@ int main()
     std::cout << "Vendor purchase report:\n";
     vendorAcq.printReport(std::cout);
 
+    // Q13: Catalogue searches
+    std::cout << "\n=== Q13: Catalogue searches ===\n";
+
+    Catalog searchCatalog;
+
+    searchCatalog.emplace<Book>(
+        "B301", "Clean Code",
+        std::vector<std::string>{"Robert C. Martin"},
+        "978-0132350884", "Prentice Hall", 2008, Money::of(450));
+
+    searchCatalog.emplace<EBook>(
+        "E301", "Effective Modern C++",
+        std::vector<std::string>{"Scott Meyers"},
+        "978-1491903995", "O'Reilly", 2014, Money::of(300),
+        "https://example.com", EBookFormat::EPUB, false);
+
+    searchCatalog.emplace<Journal>(
+        "J301", "Nature", "Springer", 2022,
+        "0028-0836", 52, Money::of(500));
+
+    std::cout << "Author search for 'Scott Meyers':\n";
+    for (const Resource *resource : searchCatalog.searchAuthor("Scott Meyers"))
+        std::cout << resource->summary() << "\n";
+
+    std::cout << "Identifier search for '0028-0836':\n";
+    for (const Resource *resource : searchCatalog.searchIdentifier("0028-0836"))
+        std::cout << resource->summary() << "\n";
+
+    std::cout << "Resources published from 2010 to 2022:\n";
+    for (const Resource *resource : searchCatalog.searchYearRange(2010, 2022))
+        std::cout << resource->summary() << "\n";
+
     return 0;
 }

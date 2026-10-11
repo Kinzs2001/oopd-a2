@@ -154,7 +154,14 @@ static void testCatalog()
     c.emplace<ElectronicResource>("R1", "ACM Digital Library", "ACM", 2026, Money::of(1),
                                   "url");
 
-    CHECK(c.size() == 3);
+    c.emplace<EBook>("E1", "Modern C++", std::vector<std::string>{"Scott Meyers"},
+                     "ISBN-123", "Publisher", 2019, Money::of(10), "url",
+                     EBookFormat::PDF, true);
+
+    c.emplace<Journal>("J1", "Nature", "Springer", 2022, "ISSN-456", 52,
+                       Money::of(100));
+
+    CHECK(c.size() == 5);
     CHECK(c.contains("B1"));
     CHECK(c.find("nope") == nullptr);
     CHECK_THROWS(c.get("nope"), NotFoundError);
@@ -163,10 +170,27 @@ static void testCatalog()
                  DuplicateIdError);
 
     CHECK(c.searchTitle("clean").size() == 2);
+
+    // Q13: Search by author.
+    CHECK(c.searchAuthor("scott meyers").size() == 1);
+    CHECK(c.searchAuthor("MEYERS").size() == 1);
+    CHECK(c.searchAuthor("unknown author").empty());
+
+    // Q13: Search by ISBN/ISSN.
+    CHECK(c.searchIdentifier("ISBN-123").size() == 1);
+    CHECK(c.searchIdentifier("issn-456").size() == 1);
+    CHECK(c.searchIdentifier("unknown").empty());
+
+    // Q13: Inclusive publication-year range.
+    CHECK(c.searchYearRange(2008, 2019).size() == 3);
+    CHECK(c.searchYearRange(2022, 2022).size() == 1);
+    CHECK(c.searchYearRange(2030, 2040).empty());
+    CHECK_THROWS(c.searchYearRange(2020, 2010), std::invalid_argument);
+
     CHECK(c.byCategory(ResourceCategory::ElectronicResource).size() == 1);
     CHECK(c.where([](const Resource &r)
                   { return r.isDigital(); })
-              .size() == 1);
+              .size() == 2);
 
     CHECK(c.holdings("B1") == 0);
     c.addHoldings("B1", 3);
@@ -174,7 +198,7 @@ static void testCatalog()
     CHECK_THROWS(c.addHoldings("B1", -5), std::invalid_argument);
 
     c.remove("R1");
-    CHECK(c.size() == 2);
+    CHECK(c.size() == 4);
     CHECK_THROWS(c.remove("R1"), NotFoundError);
 }
 
