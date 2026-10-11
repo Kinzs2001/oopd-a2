@@ -35,6 +35,7 @@ int main()
     budget.setQuota(ResourceCategory::ElectronicResource, {40, Money::of(12000)});
 
     AcquisitionManager acq(catalog, budget, 10, 18);
+    acq.setTitleLimit(ResourceCategory::Book, 2);
     std::cout << "\n=== Quotes ===\n";
     std::cout << "5 copies of B002  = " << acq.quote("B002", 5) << "\n";
     std::cout << "20 seats of R001  = " << acq.quote("R001", 20) << "  (incl. platform fee)\n";
