@@ -1,8 +1,8 @@
 #include "bookmgmt/Catalog.h"
 
 #include "bookmgmt/Book.h"
-#include "bookmgmt/EBook.h"
-#include "bookmgmt/Journal.h"
+#include "bookmgmt/MT26131_EBook.h"
+#include "bookmgmt/MT26131_Journal.h"
 
 #include <algorithm>
 #include <cctype>
