@@ -175,8 +175,136 @@ namespace bookmgmt
     }
 
     std::vector<PurchaseRecord> AcquisitionManager::processBatch(
-        const std::vector<PurchaseRequest> &requests)
+        const std::vector<PurchaseRequest> &requests, bool allOrNothing)
     {
+
+        if (allOrNothing)
+        {
+            struct Validation
+            {
+                const Resource *resource;
+                Money preTaxCost;
+                Money postTaxCost;
+                std::string reason;
+            };
+
+            std::vector<Validation> validations;
+            validations.reserve(requests.size());
+
+            // Simulate purchases without changing the real budgets or titles.
+            std::map<std::string, Budget> simulatedBudgets;
+            auto simulatedTitles = purchasedTitles_;
+            bool hasFailure = false;
+
+            for (const auto &request : requests)
+            {
+                const Resource *resource = catalog_.find(request.resourceId);
+                const Budget *actualBudget = budgetFor(request.department);
+
+                Validation validation{resource, Money{}, Money{}, {}};
+
+                if (!actualBudget)
+                {
+                    validation.reason =
+                        "unknown department: " + request.department;
+                }
+                else if (!resource)
+                {
+                    validation.reason =
+                        "resource not found: " + request.resourceId;
+                }
+                else if (request.quantity <= 0)
+                {
+                    validation.reason = "quantity must be positive";
+                }
+                else
+                {
+                    validation.preTaxCost =
+                        resource->costFor(request.quantity);
+                    validation.postTaxCost =
+                        applyTax(*resource, validation.preTaxCost);
+
+                    const auto category = resource->category();
+                    const auto limit = titleLimits_.find(category);
+                    const auto titles = simulatedTitles.find(category);
+
+                    const bool alreadyPurchased =
+                        titles != simulatedTitles.end() &&
+                        titles->second.count(request.resourceId) > 0;
+
+                    const std::size_t titleCount =
+                        titles == simulatedTitles.end()
+                            ? 0
+                            : titles->second.size();
+
+                    if (limit != titleLimits_.end() &&
+                        !alreadyPurchased &&
+                        titleCount >=
+                            static_cast<std::size_t>(limit->second))
+                    {
+                        validation.reason =
+                            std::string(categoryName(category)) +
+                            " distinct-title limit exceeded";
+                    }
+
+                    if (validation.reason.empty())
+                    {
+                        auto it = simulatedBudgets.find(request.department);
+
+                        if (it == simulatedBudgets.end())
+                        {
+                            it = simulatedBudgets
+                                     .emplace(request.department,
+                                              *actualBudget)
+                                     .first;
+                        }
+
+                        validation.reason =
+                            it->second.check(category, request.quantity,
+                                             validation.postTaxCost);
+
+                        if (validation.reason.empty())
+                        {
+                            it->second.commit(category, request.quantity,
+                                              validation.postTaxCost);
+                            simulatedTitles[category].insert(
+                                request.resourceId);
+                        }
+                    }
+                }
+
+                if (!validation.reason.empty())
+                    hasFailure = true;
+
+                validations.push_back(std::move(validation));
+            }
+
+            if (hasFailure)
+            {
+                std::vector<PurchaseRecord> rejected;
+                rejected.reserve(requests.size());
+
+                for (std::size_t i = 0; i < requests.size(); ++i)
+                {
+                    const auto &request = requests[i];
+                    const auto &validation = validations[i];
+
+                    const std::string reason =
+                        validation.reason.empty()
+                            ? "batch aborted: another request was rejected"
+                            : validation.reason;
+
+                    rejected.push_back(
+                        record(validation.resource, request.resourceId,
+                               request.quantity, validation.preTaxCost,
+                               validation.postTaxCost, false, reason,
+                               request.department));
+                }
+
+                return rejected;
+            }
+        }
+
         std::vector<PurchaseRecord> results;
         results.reserve(requests.size());
 
@@ -230,6 +358,7 @@ namespace bookmgmt
 
         return results;
     }
+
     Money AcquisitionManager::totalSpent() const
     {
         Money sum;

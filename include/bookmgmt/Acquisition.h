@@ -51,7 +51,8 @@ namespace bookmgmt
         const PurchaseRecord &cancel(int orderNo);
 
         std::vector<PurchaseRecord> processBatch(
-            const std::vector<PurchaseRequest> &requests);
+            const std::vector<PurchaseRequest> &requests,
+            bool allOrNothing = false);
 
         const std::vector<PurchaseRecord> &history() const { return history_; }
         Money totalSpent() const;

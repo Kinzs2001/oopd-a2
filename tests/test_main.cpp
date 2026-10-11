@@ -441,6 +441,53 @@ static void testBudgetRollover()
     CHECK_THROWS(current.rollover(101), std::invalid_argument);
 }
 
+static void testAllOrNothingBatch()
+{
+    Catalog c;
+    c.emplace<Book>("B1", "Book One", std::vector<std::string>{"A"},
+                    "i1", "P", 2020, Money::of(100));
+    c.emplace<Book>("B2", "Book Two", std::vector<std::string>{"B"},
+                    "i2", "P", 2021, Money::of(100));
+
+    Budget b(Money::of(500));
+    AcquisitionManager acq(c, b);
+
+    // A later invalid request must abort the entire batch.
+    const auto rejected = acq.processBatch(
+        {{"B1", 2}, {"UNKNOWN", 1}}, true);
+
+    CHECK(rejected.size() == 2);
+    CHECK(!rejected[0].approved);
+    CHECK(!rejected[1].approved);
+    CHECK(rejected[1].reason.find("not found") != std::string::npos);
+    CHECK(b.spent() == Money::of(0));
+    CHECK(b.remaining() == Money::of(500));
+    CHECK(c.holdings("B1") == 0);
+    CHECK(acq.totalSpent() == Money::of(0));
+
+    // A batch whose combined cost exceeds the budget must also abort.
+    const auto overBudget = acq.processBatch(
+        {{"B1", 3}, {"B2", 3}}, true);
+
+    CHECK(overBudget.size() == 2);
+    CHECK(!overBudget[0].approved);
+    CHECK(!overBudget[1].approved);
+    CHECK(b.spent() == Money::of(0));
+    CHECK(c.holdings("B1") == 0);
+    CHECK(c.holdings("B2") == 0);
+
+    // A fully valid batch should approve every request.
+    const auto approved = acq.processBatch(
+        {{"B1", 2}, {"B2", 1}}, true);
+
+    CHECK(approved.size() == 2);
+    CHECK(approved[0].approved);
+    CHECK(approved[1].approved);
+    CHECK(b.spent() == Money::of(300));
+    CHECK(c.holdings("B1") == 2);
+    CHECK(c.holdings("B2") == 1);
+}
+
 int main()
 {
     testMoney();
@@ -452,6 +499,7 @@ int main()
     testCancellation();
     testDepartmentBudgets();
     testBudgetRollover();
+    testAllOrNothingBatch();
 
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;

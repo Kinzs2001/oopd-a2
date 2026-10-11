@@ -94,5 +94,44 @@ int main()
     std::cout << "Carry-forward percentage: " << carryForwardPercent << "%\n";
     std::cout << "Next year's budget: " << nextYearBudget.total() << "\n";
 
+    // Q11: All-or-nothing batch processing
+    std::cout << "\n=== Q11: All-or-nothing batch ===\n";
+
+    Catalog atomicCatalog;
+    atomicCatalog.emplace<Book>(
+        "B101", "Atomic Batch Book", std::vector<std::string>{"Author A"},
+        "ISBN-101", "Publisher", 2024, Money::of(100));
+    atomicCatalog.emplace<Book>(
+        "B102", "Second Batch Book", std::vector<std::string>{"Author B"},
+        "ISBN-102", "Publisher", 2025, Money::of(100));
+
+    Budget atomicBudget(Money::of(500));
+    AcquisitionManager atomicAcq(atomicCatalog, atomicBudget);
+
+    std::cout << "Attempting a batch containing an unknown resource:\n";
+    const auto aborted = atomicAcq.processBatch(
+        {{"B101", 2}, {"UNKNOWN", 1}}, true);
+
+    for (const auto &result : aborted)
+        std::cout << "  " << result.resourceId << ": "
+                  << (result.approved ? "approved" : "rejected")
+                  << " (" << result.reason << ")\n";
+
+    std::cout << "Spent after aborted batch: "
+              << atomicBudget.spent() << "\n";
+    std::cout << "B101 holdings after aborted batch: "
+              << atomicCatalog.holdings("B101") << "\n";
+
+    std::cout << "Attempting a valid batch:\n";
+    const auto accepted = atomicAcq.processBatch(
+        {{"B101", 2}, {"B102", 1}}, true);
+
+    for (const auto &result : accepted)
+        std::cout << "  " << result.resourceId << ": "
+                  << (result.approved ? "approved" : "rejected") << "\n";
+
+    std::cout << "Spent after successful batch: "
+              << atomicBudget.spent() << "\n";
+
     return 0;
 }
