@@ -50,6 +50,17 @@ int main()
         {"R002", 5},  // 2000  rejected: e-resource spend quota (1000 left)
         {"X999", 1},  // rejected: unknown id
     });
+    std::cout << "\n=== Cancellation ===\n";
+    try
+    {
+        const auto &cancelled = acq.cancel(1);
+        std::cout << "Cancelled order #" << cancelled.relatedOrderNo
+                  << ": " << cancelled.title << "\n";
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << "Cancellation failed: " << e.what() << "\n";
+    }
 
     std::cout << "\n=== Acquisition report ===\n";
     acq.printReport(std::cout);

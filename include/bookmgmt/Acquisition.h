@@ -30,6 +30,8 @@ namespace bookmgmt
         Money cost; // Post-tax cost
         bool approved;
         std::string reason;
+        bool cancellation = false;
+        int relatedOrderNo = 0;
     };
 
     class AcquisitionManager
@@ -45,6 +47,7 @@ namespace bookmgmt
                          std::string *reason = nullptr) const;
 
         const PurchaseRecord &purchase(const std::string &id, int quantity);
+        const PurchaseRecord &cancel(int orderNo);
 
         std::vector<PurchaseRecord> processBatch(
             const std::vector<PurchaseRequest> &requests);
@@ -77,6 +80,7 @@ namespace bookmgmt
 
         std::vector<PurchaseRecord> history_;
         int nextOrderNo_ = 1;
+        std::set<int> cancelledOrders_;
     };
 
 } // namespace bookmgmt

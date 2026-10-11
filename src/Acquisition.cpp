@@ -212,13 +212,86 @@ namespace bookmgmt
 
         for (const auto &entry : history_)
         {
-            if (entry.approved)
-            {
+            if (!entry.approved)
+                continue;
+
+            if (entry.cancellation)
+                sum -= entry.cost;
+            else
                 sum += entry.cost;
-            }
         }
 
         return sum;
+    }
+
+    const PurchaseRecord &AcquisitionManager::cancel(int orderNo)
+    {
+        auto it = history_.end();
+
+        for (auto current = history_.begin(); current != history_.end(); ++current)
+        {
+            if (current->orderNo == orderNo)
+            {
+                it = current;
+                break;
+            }
+        }
+
+        if (it == history_.end())
+            throw std::invalid_argument("order not found");
+
+        if (!it->approved || it->cancellation)
+            throw std::invalid_argument("order cannot be cancelled");
+
+        if (cancelledOrders_.count(orderNo))
+            throw std::invalid_argument("order already cancelled");
+
+        const PurchaseRecord original = *it;
+
+        // Reverse the original purchase's financial and holdings effects.
+        budget_.refund(original.category, original.quantity, original.cost);
+        catalog_.addHoldings(original.resourceId, -original.quantity);
+        cancelledOrders_.insert(orderNo);
+
+        // Release the title slot only if no other active purchase uses it.
+        bool stillPurchased = false;
+
+        for (const auto &entry : history_)
+        {
+            if (entry.approved &&
+                !entry.cancellation &&
+                entry.resourceId == original.resourceId &&
+                entry.category == original.category &&
+                !cancelledOrders_.count(entry.orderNo))
+            {
+                stillPurchased = true;
+                break;
+            }
+        }
+
+        if (!stillPurchased)
+        {
+            auto titles = purchasedTitles_.find(original.category);
+
+            if (titles != purchasedTitles_.end())
+                titles->second.erase(original.resourceId);
+        }
+
+        // Preserve the original record and append a separate refund record.
+        history_.push_back(PurchaseRecord{
+            nextOrderNo_++,
+            original.resourceId,
+            original.title,
+            original.category,
+            original.quantity,
+            original.preTaxCost,
+            original.cost,
+            true,
+            "Cancellation of order #" + std::to_string(orderNo),
+            true,
+            orderNo});
+
+        return history_.back();
     }
 
     void AcquisitionManager::printReport(std::ostream &os) const
@@ -231,14 +304,23 @@ namespace bookmgmt
         for (const auto &entry : history_)
         {
             os << "  #" << std::setw(3) << std::left << entry.orderNo << " "
-               << (entry.approved ? "APPROVED" : "REJECTED") << "  "
+               << ((entry.cancellation
+                        ? "CANCELLED"
+                        : (entry.approved ? "APPROVED" : "REJECTED")))
+               << "  "
                << std::setw(6) << entry.resourceId << " x"
                << std::setw(3) << entry.quantity << " "
                << entry.title
                << "\n        Pre-tax: " << entry.preTaxCost
                << "  Post-tax: " << entry.cost;
 
-            if (!entry.approved)
+            if (entry.cancellation)
+            {
+                preTaxTotal -= entry.preTaxCost;
+                postTaxTotal -= entry.cost;
+                os << "\n        reason: " << entry.reason;
+            }
+            else if (!entry.approved)
             {
                 os << "\n        reason: " << entry.reason;
             }
@@ -247,7 +329,6 @@ namespace bookmgmt
                 preTaxTotal += entry.preTaxCost;
                 postTaxTotal += entry.cost;
             }
-
             os << "\n";
         }
 

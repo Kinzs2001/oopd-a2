@@ -276,6 +276,65 @@ static void testTitleLimits()
     CHECK_THROWS(acq.setTitleLimit(ResourceCategory::Book, -1),
                  std::invalid_argument);
 }
+
+static void testCancellation()
+{
+    Catalog c;
+    c.emplace<Book>("B1", "Book One", std::vector<std::string>{"A"},
+                    "i1", "P", 2020, Money::of(100));
+
+    Budget b(Money::of(1000));
+    b.setQuota(ResourceCategory::Book, {5, Money::of(500)});
+
+    AcquisitionManager acq(c, b, 10, 0);
+
+    // Purchase 2 copies: pre-tax 200, post-tax 220.
+    const auto &purchase = acq.purchase("B1", 2);
+    const int orderNo = purchase.orderNo;
+
+    CHECK(purchase.approved);
+    CHECK(b.spent() == Money::of(220));
+    CHECK(b.usageFor(ResourceCategory::Book).units == 2);
+    CHECK(b.usageFor(ResourceCategory::Book).spent == Money::of(220));
+    CHECK(c.holdings("B1") == 2);
+
+    // Cancel the approved order.
+    const auto &cancelRecord = acq.cancel(orderNo);
+
+    CHECK(cancelRecord.cancellation);
+    CHECK(cancelRecord.relatedOrderNo == orderNo);
+    CHECK(cancelRecord.reason.find("Cancellation") != std::string::npos);
+
+    // Budget, category quota, and holdings are restored.
+    CHECK(b.spent() == Money::of(0));
+    CHECK(b.remaining() == Money::of(1000));
+    CHECK(b.usageFor(ResourceCategory::Book).units == 0);
+    CHECK(b.usageFor(ResourceCategory::Book).spent == Money::of(0));
+    CHECK(c.holdings("B1") == 0);
+    CHECK(acq.totalSpent() == Money::of(0));
+
+    // Original purchase and separate cancellation record remain in history.
+    CHECK(acq.history().size() == 2);
+    CHECK(acq.history()[0].orderNo == orderNo);
+    CHECK(acq.history()[0].approved);
+    CHECK(!acq.history()[0].cancellation);
+    CHECK(acq.history()[1].cancellation);
+
+    // Duplicate cancellation must fail.
+    CHECK_THROWS(acq.cancel(orderNo), std::invalid_argument);
+
+    // Rejected and nonexistent orders cannot be cancelled.
+    const auto rejected = acq.processBatch({{"B1", 0}});
+    CHECK(rejected.size() == 1);
+    CHECK(!rejected[0].approved);
+    CHECK_THROWS(acq.cancel(rejected[0].orderNo), std::invalid_argument);
+    CHECK_THROWS(acq.cancel(9999), std::invalid_argument);
+
+    // Cancellation releases the distinct-title slot.
+    acq.setTitleLimit(ResourceCategory::Book, 1);
+    CHECK(acq.canPurchase("B1", 1));
+}
+
 int main()
 {
     testMoney();
@@ -284,6 +343,8 @@ int main()
     testBudget();
     testAcquisition();
     testTitleLimits();
+    testCancellation();
+
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }
