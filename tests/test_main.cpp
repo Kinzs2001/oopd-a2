@@ -335,6 +335,84 @@ static void testCancellation()
     CHECK(acq.canPurchase("B1", 1));
 }
 
+static void testDepartmentBudgets()
+{
+    Catalog c;
+    c.emplace<Book>("B1", "Book One", std::vector<std::string>{"A"},
+                    "i1", "P", 2020, Money::of(100));
+
+    Budget generalBudget(Money::of(1000));
+    AcquisitionManager acq(c, generalBudget, 10, 0);
+
+    acq.addDepartment("Computer Science", Money::of(500));
+    acq.addDepartment("Physics", Money::of(150));
+
+    // Each department has independent quotas.
+    acq.departmentBudget("Computer Science")
+        .setQuota(ResourceCategory::Book, {2, Money::of(500)});
+
+    acq.departmentBudget("Physics")
+        .setQuota(ResourceCategory::Book, {1, Money::of(150)});
+
+    // Computer Science buys 2 copies; Physics buys 1.
+    const auto results = acq.processBatch({{"B1", 2, "Computer Science"},
+                                           {"B1", 1, "Physics"},
+                                           {"B1", 1, "Unknown Department"}});
+
+    CHECK(results.size() == 3);
+    CHECK(results[0].approved);
+    CHECK(results[1].approved);
+    CHECK(!results[2].approved);
+
+    // Each purchase is charged to the requested department.
+    CHECK(results[0].department == "Computer Science");
+    CHECK(results[1].department == "Physics");
+    CHECK(results[2].department == "Unknown Department");
+
+    Budget &cs = acq.departmentBudget("Computer Science");
+    Budget &physics = acq.departmentBudget("Physics");
+
+    // Post-tax price is 110 per copy.
+    CHECK(cs.spent() == Money::of(220));
+    CHECK(physics.spent() == Money::of(110));
+
+    CHECK(cs.usageFor(ResourceCategory::Book).units == 2);
+    CHECK(physics.usageFor(ResourceCategory::Book).units == 1);
+
+    // Department spending must not affect the general budget.
+    CHECK(generalBudget.spent() == Money::of(0));
+    CHECK(generalBudget.remaining() == Money::of(1000));
+
+    // Physics cannot exceed its own unit quota.
+    CHECK_THROWS(
+        acq.purchase("B1", 1, "Physics"),
+        bookmgmt::QuotaExceededError);
+
+    CHECK(physics.usageFor(ResourceCategory::Book).units == 1);
+    CHECK(physics.spent() == Money::of(110));
+
+    // Cancelling Computer Science's order refunds only its budget.
+    const int csOrderNo = results[0].orderNo;
+    const auto &cancelRecord = acq.cancel(csOrderNo);
+
+    CHECK(cancelRecord.cancellation);
+    CHECK(cancelRecord.department == "Computer Science");
+    CHECK(cs.spent() == Money::of(0));
+    CHECK(cs.usageFor(ResourceCategory::Book).units == 0);
+
+    CHECK(physics.spent() == Money::of(110));
+    CHECK(physics.usageFor(ResourceCategory::Book).units == 1);
+
+    // Holdings reflect the active purchases after cancellation.
+    CHECK(c.holdings("B1") == 1);
+
+    // Invalid department operations must fail.
+    CHECK_THROWS(acq.departmentBudget("Unknown Department"),
+                 std::invalid_argument);
+    CHECK_THROWS(acq.addDepartment("Physics", Money::of(100)),
+                 std::invalid_argument);
+}
+
 int main()
 {
     testMoney();
@@ -344,6 +422,7 @@ int main()
     testAcquisition();
     testTitleLimits();
     testCancellation();
+    testDepartmentBudgets();
 
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;

@@ -17,6 +17,7 @@ namespace bookmgmt
     {
         std::string resourceId;
         int quantity;
+        std::string department = "General";
     };
 
     struct PurchaseRecord
@@ -32,6 +33,7 @@ namespace bookmgmt
         std::string reason;
         bool cancellation = false;
         int relatedOrderNo = 0;
+        std::string department = "General";
     };
 
     class AcquisitionManager
@@ -46,7 +48,6 @@ namespace bookmgmt
         bool canPurchase(const std::string &id, int quantity,
                          std::string *reason = nullptr) const;
 
-        const PurchaseRecord &purchase(const std::string &id, int quantity);
         const PurchaseRecord &cancel(int orderNo);
 
         std::vector<PurchaseRecord> processBatch(
@@ -60,6 +61,19 @@ namespace bookmgmt
         // Set the maximum number of distinct resource IDs purchasable per category.
         void setTitleLimit(ResourceCategory category, int maxTitles);
 
+        void addDepartment(const std::string &name, Money total);
+
+        Budget &departmentBudget(const std::string &name);
+        const Budget &departmentBudget(const std::string &name) const;
+
+        bool canPurchase(const std::string &id, int quantity,
+                         const std::string &department,
+                         std::string *reason = nullptr) const;
+
+        const PurchaseRecord &purchase(
+            const std::string &id, int quantity,
+            const std::string &department = "General");
+
     private:
         Money applyTax(const Resource &resource, Money preTaxCost) const;
 
@@ -68,8 +82,8 @@ namespace bookmgmt
 
         PurchaseRecord &record(const Resource *resource, const std::string &id,
                                int quantity, Money preTaxCost, Money postTaxCost,
-                               bool approved, std::string reason);
-
+                               bool approved, std::string reason,
+                               const std::string &department = "General");
         Catalog &catalog_;
         Budget &budget_;
         int printTaxPercent_;
@@ -80,7 +94,12 @@ namespace bookmgmt
 
         std::vector<PurchaseRecord> history_;
         int nextOrderNo_ = 1;
+
         std::set<int> cancelledOrders_;
+        std::map<std::string, Budget> departmentBudgets_;
+
+        Budget *budgetFor(const std::string &department);
+        const Budget *budgetFor(const std::string &department) const;
     };
 
 } // namespace bookmgmt

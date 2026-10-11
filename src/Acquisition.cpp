@@ -5,6 +5,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <utility>
+#include <tuple>
 
 #include "bookmgmt/Exceptions.h"
 
@@ -80,12 +81,24 @@ namespace bookmgmt
         titleLimits_[category] = maxTitles;
     }
 
-    bool AcquisitionManager::canPurchase(const std::string &id, int quantity,
-                                         std::string *reason) const
+    bool AcquisitionManager::canPurchase(
+        const std::string &id, int quantity, std::string *reason) const
+    {
+        return canPurchase(id, quantity, "General", reason);
+    }
+
+    bool AcquisitionManager::canPurchase(
+        const std::string &id, int quantity,
+        const std::string &department, std::string *reason) const
     {
         std::string why;
+        const Budget *budget = budgetFor(department);
 
-        if (const Resource *resource = catalog_.find(id))
+        if (!budget)
+        {
+            why = "unknown department: " + department;
+        }
+        else if (const Resource *resource = catalog_.find(id))
         {
             if (quantity <= 0)
             {
@@ -97,11 +110,10 @@ namespace bookmgmt
                 const Money postTaxCost = applyTax(*resource, preTaxCost);
 
                 why = checkTitleLimit(*resource, id);
+
                 if (why.empty())
-                {
-                    why = budget_.check(resource->category(), quantity,
+                    why = budget->check(resource->category(), quantity,
                                         postTaxCost);
-                }
             }
         }
         else
@@ -110,16 +122,15 @@ namespace bookmgmt
         }
 
         if (reason)
-        {
             *reason = why;
-        }
 
         return why.empty();
     }
 
     PurchaseRecord &AcquisitionManager::record(
         const Resource *resource, const std::string &id, int quantity,
-        Money preTaxCost, Money postTaxCost, bool approved, std::string reason)
+        Money preTaxCost, Money postTaxCost, bool approved,
+        std::string reason, const std::string &department)
     {
         history_.push_back(PurchaseRecord{
             nextOrderNo_++,
@@ -130,31 +141,37 @@ namespace bookmgmt
             preTaxCost,
             postTaxCost,
             approved,
-            std::move(reason)});
+            std::move(reason),
+            false,
+            0,
+            department});
 
         return history_.back();
     }
 
-    const PurchaseRecord &AcquisitionManager::purchase(const std::string &id,
-                                                       int quantity)
+    const PurchaseRecord &AcquisitionManager::purchase(
+        const std::string &id, int quantity, const std::string &department)
     {
         const Resource &resource = catalog_.get(id);
+        Budget *budget = budgetFor(department);
+
+        if (!budget)
+            throw std::invalid_argument("unknown department: " + department);
 
         const Money preTaxCost = resource.costFor(quantity);
         const Money postTaxCost = applyTax(resource, preTaxCost);
 
         const std::string reason = checkTitleLimit(resource, id);
+
         if (!reason.empty())
-        {
             throw QuotaExceededError(reason);
-        }
 
-        budget_.commit(resource.category(), quantity, postTaxCost);
+        budget->commit(resource.category(), quantity, postTaxCost);
         catalog_.addHoldings(id, quantity);
-
         purchasedTitles_[resource.category()].insert(id);
 
-        return record(&resource, id, quantity, preTaxCost, postTaxCost, true, {});
+        return record(&resource, id, quantity, preTaxCost,
+                      postTaxCost, true, {}, department);
     }
 
     std::vector<PurchaseRecord> AcquisitionManager::processBatch(
@@ -166,11 +183,17 @@ namespace bookmgmt
         for (const auto &request : requests)
         {
             const Resource *resource = catalog_.find(request.resourceId);
+            const Budget *budget = budgetFor(request.department);
+
             Money preTaxCost;
             Money postTaxCost;
             std::string reason;
 
-            if (!resource)
+            if (!budget)
+            {
+                reason = "unknown department: " + request.department;
+            }
+            else if (!resource)
             {
                 reason = "resource not found: " + request.resourceId;
             }
@@ -184,28 +207,29 @@ namespace bookmgmt
                 postTaxCost = applyTax(*resource, preTaxCost);
 
                 reason = checkTitleLimit(*resource, request.resourceId);
+
                 if (reason.empty())
-                {
-                    reason = budget_.check(resource->category(),
+                    reason = budget->check(resource->category(),
                                            request.quantity, postTaxCost);
-                }
             }
 
             if (reason.empty())
             {
-                results.push_back(purchase(request.resourceId, request.quantity));
+                results.push_back(
+                    purchase(request.resourceId, request.quantity,
+                             request.department));
             }
             else
             {
-                results.push_back(record(resource, request.resourceId,
-                                         request.quantity, preTaxCost, postTaxCost,
-                                         false, reason));
+                results.push_back(
+                    record(resource, request.resourceId, request.quantity,
+                           preTaxCost, postTaxCost, false, reason,
+                           request.department));
             }
         }
 
         return results;
     }
-
     Money AcquisitionManager::totalSpent() const
     {
         Money sum;
@@ -249,7 +273,13 @@ namespace bookmgmt
         const PurchaseRecord original = *it;
 
         // Reverse the original purchase's financial and holdings effects.
-        budget_.refund(original.category, original.quantity, original.cost);
+        Budget *budget = budgetFor(original.department);
+
+        if (!budget)
+            throw std::invalid_argument("department budget not found");
+
+        budget->refund(original.category, original.quantity, original.cost);
+
         catalog_.addHoldings(original.resourceId, -original.quantity);
         cancelledOrders_.insert(orderNo);
 
@@ -289,7 +319,8 @@ namespace bookmgmt
             true,
             "Cancellation of order #" + std::to_string(orderNo),
             true,
-            orderNo});
+            orderNo,
+            original.department});
 
         return history_.back();
     }
@@ -337,4 +368,57 @@ namespace bookmgmt
         os << "Total spent: " << totalSpent() << "\n";
     }
 
+    Budget *AcquisitionManager::budgetFor(const std::string &department)
+    {
+        if (department == "General")
+            return &budget_;
+
+        auto it = departmentBudgets_.find(department);
+        return it == departmentBudgets_.end() ? nullptr : &it->second;
+    }
+
+    const Budget *AcquisitionManager::budgetFor(
+        const std::string &department) const
+    {
+        if (department == "General")
+            return &budget_;
+
+        auto it = departmentBudgets_.find(department);
+        return it == departmentBudgets_.end() ? nullptr : &it->second;
+    }
+
+    void AcquisitionManager::addDepartment(const std::string &name, Money total)
+    {
+        if (name.empty() || name == "General")
+            throw std::invalid_argument("invalid or reserved department name");
+
+        auto result = departmentBudgets_.emplace(
+            std::piecewise_construct,
+            std::forward_as_tuple(name),
+            std::forward_as_tuple(total));
+
+        if (!result.second)
+            throw std::invalid_argument("department already exists: " + name);
+    }
+
+    Budget &AcquisitionManager::departmentBudget(const std::string &name)
+    {
+        Budget *budget = budgetFor(name);
+
+        if (!budget)
+            throw std::invalid_argument("unknown department: " + name);
+
+        return *budget;
+    }
+
+    const Budget &AcquisitionManager::departmentBudget(
+        const std::string &name) const
+    {
+        const Budget *budget = budgetFor(name);
+
+        if (!budget)
+            throw std::invalid_argument("unknown department: " + name);
+
+        return *budget;
+    }
 } // namespace bookmgmt
