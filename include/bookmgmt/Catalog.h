@@ -52,6 +52,12 @@ namespace bookmgmt
         std::vector<const Resource *> where(
             const std::function<bool(const Resource &)> &pred) const;
 
+        void borrowCopy(const std::string &resourceId, const std::string &patronId);
+        void returnCopy(const std::string &resourceId, const std::string &patronId);
+
+        void openSession(const std::string &resourceId, const std::string &patronId);
+        void closeSession(const std::string &resourceId, const std::string &patronId);
+
     private:
         struct Entry
         {
@@ -59,6 +65,8 @@ namespace bookmgmt
             int holdings = 0;
         };
         std::map<std::string, Entry> items_;
+        std::map<std::string, std::vector<std::string>> borrowedByResource_;
+        std::map<std::string, std::vector<std::string>> sessionsByResource_;
     };
 
 } // namespace bookmgmt

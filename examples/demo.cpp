@@ -193,5 +193,35 @@ int main()
     for (const Resource *resource : searchCatalog.searchYearRange(2010, 2022))
         std::cout << resource->summary() << "\n";
 
+    // Q14: Lending and electronic sessions
+    std::cout << "\n=== Q14: Lending and electronic sessions ===\n";
+
+    Catalog lendingCatalog;
+
+    lendingCatalog.emplace<Book>(
+        "B401", "Test Book", std::vector<std::string>{"Author"},
+        "ISBN-401", "Publisher", 2020, Money::of(100));
+
+    lendingCatalog.emplace<EBook>(
+        "E401", "Test EBook", std::vector<std::string>{"Author"},
+        "ISBN-E401", "Publisher", 2021, Money::of(50),
+        "https://example.com/ebook", EBookFormat::PDF, false,
+        LicenseModel::AnnualSubscription, Money::of(100));
+
+    lendingCatalog.addHoldings("B401", 2);
+    lendingCatalog.addHoldings("E401", 2);
+
+    lendingCatalog.borrowCopy("B401", "P1");
+    std::cout << "P1 borrowed print book B401\n";
+
+    lendingCatalog.returnCopy("B401", "P1");
+    std::cout << "P1 returned print book B401\n";
+
+    lendingCatalog.openSession("E401", "P2");
+    std::cout << "P2 opened electronic session E401\n";
+
+    lendingCatalog.closeSession("E401", "P2");
+    std::cout << "P2 closed electronic session E401\n";
+
     return 0;
 }

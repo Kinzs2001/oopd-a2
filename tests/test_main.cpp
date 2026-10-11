@@ -579,6 +579,54 @@ static void testVendors()
     CHECK_THROWS(noOffers.cheapestVendorOffer(), std::logic_error);
 }
 
+static void testLending()
+{
+    Catalog c;
+
+    c.emplace<Book>("B14", "Test Book",
+                    std::vector<std::string>{"Author"},
+                    "ISBN-14", "Publisher", 2020, Money::of(100));
+
+    c.emplace<EBook>("E14", "Test EBook",
+                     std::vector<std::string>{"Author"},
+                     "ISBN-E14", "Publisher", 2021, Money::of(50),
+                     "https://example.com/ebook", EBookFormat::PDF, false,
+                     LicenseModel::AnnualSubscription, Money::of(100));
+
+    c.addHoldings("B14", 2);
+    c.addHoldings("E14", 2);
+
+    // Print borrowing and return.
+    c.borrowCopy("B14", "P1");
+    c.borrowCopy("B14", "P2");
+
+    CHECK_THROWS(c.borrowCopy("B14", "P3"), std::runtime_error);
+    CHECK_THROWS(c.borrowCopy("B14", "P1"), std::logic_error);
+    CHECK_THROWS(c.returnCopy("B14", "P3"), std::logic_error);
+
+    c.returnCopy("B14", "P1");
+    c.borrowCopy("B14", "P3");
+
+    // Electronic sessions.
+    c.openSession("E14", "P1");
+    c.openSession("E14", "P2");
+
+    CHECK_THROWS(c.openSession("E14", "P3"), std::runtime_error);
+    CHECK_THROWS(c.openSession("E14", "P1"), std::logic_error);
+    CHECK_THROWS(c.closeSession("E14", "P3"), std::logic_error);
+
+    c.closeSession("E14", "P1");
+    c.openSession("E14", "P3");
+
+    // Wrong resource types and invalid patron IDs.
+    CHECK_THROWS(c.borrowCopy("E14", "P4"), std::invalid_argument);
+    CHECK_THROWS(c.returnCopy("E14", "P4"), std::invalid_argument);
+    CHECK_THROWS(c.openSession("B14", "P4"), std::invalid_argument);
+    CHECK_THROWS(c.closeSession("B14", "P4"), std::invalid_argument);
+    CHECK_THROWS(c.borrowCopy("B14", ""), std::invalid_argument);
+    CHECK_THROWS(c.openSession("E14", ""), std::invalid_argument);
+}
+
 int main()
 {
     testMoney();
@@ -592,6 +640,7 @@ int main()
     testBudgetRollover();
     testAllOrNothingBatch();
     testVendors();
+    testLending();
 
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;

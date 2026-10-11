@@ -8,6 +8,9 @@
 #include <cctype>
 #include <stdexcept>
 
+#include <algorithm>
+#include <stdexcept>
+
 #include "bookmgmt/Exceptions.h"
 
 namespace bookmgmt
@@ -187,6 +190,122 @@ namespace bookmgmt
         const std::string needle = lower(text);
         return where([&needle](const Resource &r)
                      { return lower(r.title()).find(needle) != std::string::npos; });
+    }
+
+    void Catalog::borrowCopy(const std::string &resourceId,
+                             const std::string &patronId)
+    {
+        const Resource &resource = get(resourceId);
+
+        if (resource.isDigital())
+        {
+            throw std::invalid_argument("Cannot borrow a digital resource as a print copy");
+        }
+
+        if (patronId.empty())
+        {
+            throw std::invalid_argument("Patron ID cannot be empty");
+        }
+
+        auto &borrowers = borrowedByResource_[resourceId];
+
+        if (std::find(borrowers.begin(), borrowers.end(), patronId) != borrowers.end())
+        {
+            throw std::logic_error("Patron has already borrowed this resource");
+        }
+
+        if (static_cast<int>(borrowers.size()) >= holdings(resourceId))
+        {
+            throw std::runtime_error("No print copies available");
+        }
+
+        borrowers.push_back(patronId);
+    }
+
+    void Catalog::returnCopy(const std::string &resourceId,
+                             const std::string &patronId)
+    {
+        const Resource &resource = get(resourceId);
+
+        if (resource.isDigital())
+        {
+            throw std::invalid_argument("Digital resources use sessions, not print returns");
+        }
+
+        auto it = borrowedByResource_.find(resourceId);
+
+        if (it == borrowedByResource_.end())
+        {
+            throw std::logic_error("No active borrowing found");
+        }
+
+        auto &borrowers = it->second;
+        auto patron = std::find(borrowers.begin(), borrowers.end(), patronId);
+
+        if (patron == borrowers.end())
+        {
+            throw std::logic_error("Patron has not borrowed this resource");
+        }
+
+        borrowers.erase(patron);
+    }
+
+    void Catalog::openSession(const std::string &resourceId,
+                              const std::string &patronId)
+    {
+        const Resource &resource = get(resourceId);
+
+        if (!resource.isDigital())
+        {
+            throw std::invalid_argument("Sessions are only for digital resources");
+        }
+
+        if (patronId.empty())
+        {
+            throw std::invalid_argument("Patron ID cannot be empty");
+        }
+
+        auto &sessions = sessionsByResource_[resourceId];
+
+        if (std::find(sessions.begin(), sessions.end(), patronId) != sessions.end())
+        {
+            throw std::logic_error("Patron already has an active session");
+        }
+
+        if (static_cast<int>(sessions.size()) >= holdings(resourceId))
+        {
+            throw std::runtime_error("No electronic sessions available");
+        }
+
+        sessions.push_back(patronId);
+    }
+
+    void Catalog::closeSession(const std::string &resourceId,
+                               const std::string &patronId)
+    {
+        const Resource &resource = get(resourceId);
+
+        if (!resource.isDigital())
+        {
+            throw std::invalid_argument("Only digital resources have sessions");
+        }
+
+        auto it = sessionsByResource_.find(resourceId);
+
+        if (it == sessionsByResource_.end())
+        {
+            throw std::logic_error("No active session found");
+        }
+
+        auto &sessions = it->second;
+        auto patron = std::find(sessions.begin(), sessions.end(), patronId);
+
+        if (patron == sessions.end())
+        {
+            throw std::logic_error("Patron has no active session");
+        }
+
+        sessions.erase(patron);
     }
 
 } // namespace bookmgmt
