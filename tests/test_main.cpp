@@ -413,6 +413,34 @@ static void testDepartmentBudgets()
                  std::invalid_argument);
 }
 
+static void testBudgetRollover()
+{
+    Budget current(Money::of(10000));
+    current.setQuota(ResourceCategory::Book,
+                     {10, Money::of(5000)});
+
+    current.commit(ResourceCategory::Book, 2, Money::of(3000));
+
+    // Unspent = 10000 - 3000 = 7000.
+    const Budget half = current.rollover(50);
+    CHECK(half.total() == Money::of(3500));
+    CHECK(half.spent() == Money::of(0));
+    CHECK(half.remaining() == Money::of(3500));
+
+    // The original budget remains unchanged.
+    CHECK(current.total() == Money::of(10000));
+    CHECK(current.spent() == Money::of(3000));
+    CHECK(current.remaining() == Money::of(7000));
+
+    // Zero and 100% carry-forward.
+    CHECK(current.rollover(0).total() == Money::of(0));
+    CHECK(current.rollover(100).total() == Money::of(7000));
+
+    // Invalid percentages must be rejected.
+    CHECK_THROWS(current.rollover(-1), std::invalid_argument);
+    CHECK_THROWS(current.rollover(101), std::invalid_argument);
+}
+
 int main()
 {
     testMoney();
@@ -423,6 +451,7 @@ int main()
     testTitleLimits();
     testCancellation();
     testDepartmentBudgets();
+    testBudgetRollover();
 
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;

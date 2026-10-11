@@ -55,6 +55,7 @@ namespace bookmgmt
         // Refund a previously committed purchase.
         void refund(ResourceCategory c, int units, Money cost);
 
+        Budget rollover(int carryForwardPercent) const;
         void print(std::ostream &os) const;
 
     private:

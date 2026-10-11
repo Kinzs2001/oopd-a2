@@ -83,5 +83,16 @@ int main()
     {
         std::cout << "QuotaExceededError: " << e.what() << "\n";
     }
+
+    // Q10: Year-end budget rollover
+    std::cout << "\n=== Q10: Year-end budget rollover ===\n";
+
+    const int carryForwardPercent = 50;
+    const Budget nextYearBudget = budget.rollover(carryForwardPercent);
+
+    std::cout << "This year's unspent budget: " << budget.remaining() << "\n";
+    std::cout << "Carry-forward percentage: " << carryForwardPercent << "%\n";
+    std::cout << "Next year's budget: " << nextYearBudget.total() << "\n";
+
     return 0;
 }

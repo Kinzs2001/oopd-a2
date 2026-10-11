@@ -138,6 +138,18 @@ namespace bookmgmt
         spent_ -= cost;
     }
 
+    Budget Budget::rollover(int carryForwardPercent) const
+    {
+        if (carryForwardPercent < 0 || carryForwardPercent > 100)
+            throw std::invalid_argument(
+                "carry-forward percentage must be in 0..100");
+
+        const std::int64_t carriedMinor =
+            remaining().minorUnits() * carryForwardPercent / 100;
+
+        return Budget(Money::fromMinor(carriedMinor));
+    }
+
     void Budget::print(std::ostream &os) const
     {
         os << "Budget: total " << total_ << ", spent " << spent_ << ", remaining "
